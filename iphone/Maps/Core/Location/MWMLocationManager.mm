@@ -92,16 +92,6 @@ BOOL keepRunningInBackground()
 NSString * const kLocationPermissionRequestedKey = @"kLocationPermissionRequestedKey";
 NSString * const kLocationAlertNeedShowKey = @"kLocationAlertNeedShowKey";
 
-BOOL isPermissionRequested() {
-  return [NSUserDefaults.standardUserDefaults boolForKey:kLocationPermissionRequestedKey];
-}
-
-void setPermissionRequested() {
-  NSUserDefaults * ud = NSUserDefaults.standardUserDefaults;
-  [ud setBool:YES forKey:kLocationPermissionRequestedKey];
-  [ud synchronize];
-}
-       
 BOOL needShowLocationAlert() {
   NSUserDefaults * ud = NSUserDefaults.standardUserDefaults;
   if ([ud objectForKey:kLocationAlertNeedShowKey] == nil)
@@ -189,16 +179,19 @@ void setShowLocationAlert(BOOL needShow) {
 
 + (void)applicationDidBecomeActive
 {
-  if (isPermissionRequested() || ![FirstSession isFirstSession])
+  MWMLocationManager *manager = [self manager];
+  [manager requestPermissionIfNeededFor:manager.locationManager];
+  
+  if (![FirstSession isFirstSession])
   {
     [self start];
-    [[self manager] updateFrameworkInfo];
+    [manager updateFrameworkInfo];
   }
 }
 
 + (void)applicationWillResignActive
 {
-  BOOL const keepRunning = isPermissionRequested() && keepRunningInBackground();
+  BOOL const keepRunning = keepRunningInBackground();
   MWMLocationManager * manager = [self manager];
   CLLocationManager * locationManager = manager.locationManager;
   if ([locationManager respondsToSelector:@selector(setAllowsBackgroundLocationUpdates:)])
@@ -443,6 +436,28 @@ void setShowLocationAlert(BOOL needShow) {
     [self processLocationStatus:MWMLocationStatusDenied];
 }
 
+- (void)locationManager:(CLLocationManager *)manager didChangeAuthorizationStatus:(CLAuthorizationStatus)status 
+{
+  switch (status) {
+    case kCLAuthorizationStatusAuthorizedWhenInUse:
+    case kCLAuthorizationStatusAuthorizedAlways:
+      [self startUpdatingLocationFor:manager];
+      [self processLocationStatus:MWMLocationStatusNoError];
+      break;
+    case kCLAuthorizationStatusNotDetermined:
+      [self requestPermissionIfNeededFor:manager];
+      break;
+    case kCLAuthorizationStatusRestricted:
+    case kCLAuthorizationStatusDenied:
+      if ([CLLocationManager locationServicesEnabled]) {
+        [self processLocationStatus:MWMLocationStatusDenied];
+      } else {
+        [self processLocationStatus:MWMLocationStatusGPSIsOff];
+      }
+      break;
+  }
+}
+
 #pragma mark - Start / Stop
 
 - (void)setStarted:(BOOL)started
@@ -469,43 +484,24 @@ void setShowLocationAlert(BOOL needShow) {
   }
 }
 
+- (void)requestPermissionIfNeededFor:(CLLocationManager *)manager
+{
+  [manager requestWhenInUseAuthorization];
+}
+
+- (void)startUpdatingLocationFor:(CLLocationManager *)manager
+{
+  LOG(LINFO, ("startUpdatingLocation"));
+  
+  [manager startUpdatingLocation];
+  if ([CLLocationManager headingAvailable])
+    [manager startUpdatingHeading];
+}
+
 - (BOOL)start
 {
-  MWMVoidBlock doStart = ^{
-    LOG(LINFO, ("startUpdatingLocation"));
-
-    CLLocationManager * locationManager = self.locationManager;
-    if ([locationManager respondsToSelector:@selector(requestWhenInUseAuthorization)])
-      [locationManager requestWhenInUseAuthorization];
-
-    [locationManager startUpdatingLocation];
-
-    setPermissionRequested();
-
-    if ([CLLocationManager headingAvailable])
-      [locationManager startUpdatingHeading];
-  };
-
-  if ([CLLocationManager locationServicesEnabled])
-  {
-    switch ([CLLocationManager authorizationStatus])
-    {
-    case kCLAuthorizationStatusAuthorizedWhenInUse:
-    case kCLAuthorizationStatusAuthorizedAlways:
-    case kCLAuthorizationStatusNotDetermined:
-        doStart();
-        return YES;
-    case kCLAuthorizationStatusRestricted:
-    case kCLAuthorizationStatusDenied:
-        [self processLocationStatus:MWMLocationStatusDenied];
-        break;
-    }
-  }
-  else
-  {
-    [self processLocationStatus:MWMLocationStatusGPSIsOff];
-  }
-  return NO;
+  [self locationManager];
+  return [CLLocationManager locationServicesEnabled];
 }
 
 - (void)stop
