@@ -398,9 +398,8 @@ public class SearchFragment extends BaseMwmFragment
     if (RoutingController.get().isWaitingPoiPick())
     {
       SearchResult.Description description = result.description;
-      String subtitle = description != null
-          ? Utils.getLocalizedFeatureType(requireContext(), description.featureType)
-          : "";
+      String subtitle = (description != null) ? description.featureType : "";
+      /// @todo Hm, is it ok here? Empty title if name is not empty?
       String title = TextUtils.isEmpty(result.name) ? subtitle : "";
 
       final MapObject point = MapObject.createMapObject(FeatureId.EMPTY, MapObject.SEARCH,

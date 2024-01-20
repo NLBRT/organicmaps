@@ -41,7 +41,7 @@ public class SearchResult
   public static class Description
   {
     public final FeatureId featureId;
-    public final String featureType;
+    public final String featureType;  // localized
     public final String region;
     public final Distance distance;
 
