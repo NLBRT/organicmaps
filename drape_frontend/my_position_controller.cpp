@@ -342,7 +342,9 @@ void MyPositionController::NextMode(ScreenBase const & screen)
   // Skip switching to next mode while we are waiting for position.
   if (IsWaitingForLocation())
   {
+    // Stop looking for location.
     m_desiredInitMode = location::Follow;
+    ChangeMode(location::NotFollowNoPosition);
     return;
   }
 
@@ -670,10 +672,18 @@ void MyPositionController::StopLocationFollow()
 
 void MyPositionController::OnEnterForeground(double backgroundTime)
 {
-  if (backgroundTime >= kMaxTimeInBackgroundSec && m_mode == location::NotFollow)
+  if (backgroundTime >= kMaxTimeInBackgroundSec)
   {
-    ChangeMode(m_isInRouting ? location::FollowAndRotate : location::Follow);
-    UpdateViewport(kDoNotChangeZoom);
+      if (m_mode == location::NotFollow)
+      {
+          ChangeMode(m_isInRouting ? location::FollowAndRotate : location::Follow);
+          UpdateViewport(kDoNotChangeZoom);
+      }
+      else if (m_mode == location::NotFollowNoPosition)
+      {
+          ChangeMode(location::PendingPosition);
+          UpdateViewport(kDoNotChangeZoom);
+      }
   }
 }
 
